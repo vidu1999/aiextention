@@ -2,8 +2,8 @@
 // only sent to the endpoints the user configured.
 
 export const DEFAULT_SPEECH = {
-  engine: 'azure', // 'azure' (neural, best for Sinhala) or 'browser'
-  azureKey: '',
+  engine: 'free', // 'free' (no key, default), 'azure' (paid, optional) or 'browser' (device voices only)
+  azureKey: '', // only for the optional Azure engine
   azureRegion: '',
   voice: 'si-LK-ThiliniNeural',
   rate: -5, // slightly slower than normal, like a teacher
@@ -32,7 +32,7 @@ export function normalizeSettings(input = {}) {
     model: String(input.model ?? '').trim(),
     language: input.language === 'en' ? 'en' : 'si',
     speech: {
-      engine: speech.engine === 'browser' ? 'browser' : 'azure',
+      engine: ['free', 'azure', 'browser'].includes(speech.engine) ? speech.engine : 'free',
       azureKey: String(speech.azureKey ?? '').trim(),
       azureRegion: String(speech.azureRegion ?? '').trim().toLowerCase().replace(/\s+/g, ''),
       voice: String(speech.voice ?? DEFAULT_SPEECH.voice).trim() || DEFAULT_SPEECH.voice,

@@ -230,6 +230,12 @@ test('normalizeSettings adds Sinhala defaults and cleans speech values', () => {
   assert.equal(custom.speech.autoSpeak, true);
   assert.equal(custom.speech.voice, DEFAULT_SPEECH.voice);
   assert.equal(normalizeSettings({ language: 'en' }).language, 'en');
+
+  // Free voice is the default; Azure is only used when chosen; unknown values fall back to free.
+  assert.equal(DEFAULT_SPEECH.engine, 'free');
+  assert.equal(normalizeSettings({ speech: { engine: 'azure' } }).speech.engine, 'azure');
+  assert.equal(normalizeSettings({ speech: { engine: 'nonsense' } }).speech.engine, 'free');
+  assert.equal(normalizeSettings({ speech: { engine: 'browser' } }).speech.engine, 'browser');
 });
 
 test('system prompt asks for Sinhala replies and teacher-style speech when oral is on', () => {

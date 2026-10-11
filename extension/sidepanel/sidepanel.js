@@ -59,7 +59,7 @@ const state = {
 // is currently playing; `speakRun` ignores errors from runs that were superseded.
 let speakingBtn = null;
 let speakRun = 0;
-const player = new OralPlayer({ onChange: handleSpeechChange });
+const player = new OralPlayer({ onChange: handleSpeechChange, onNotice: handleSpeechNotice });
 
 // Voice input state. `listenMode` is 'azure' or 'browser' while the microphone is on.
 let listenMode = null;
@@ -176,7 +176,8 @@ function renderChips(settings) {
 }
 
 function speechReady(speech) {
-  return speech.engine === 'browser' || Boolean(speech.azureKey && speech.azureRegion);
+  // The free and device engines need no key; only the optional Azure engine does.
+  return speech.engine !== 'azure' || Boolean(speech.azureKey && speech.azureRegion);
 }
 
 /* ---------- voice input ---------- */
@@ -206,7 +207,8 @@ async function startListening() {
   setVoiceStatus('');
   dictation = { base: ui.input.value.trim(), settings, browser: null };
   try {
-    if (settings.speech.engine === 'browser') {
+    if (settings.speech.engine !== 'azure') {
+      // Free: the browser's built-in recognition (Chrome, no key).
       dictation.browser = startBrowserListening({
         lang: sttLanguage(settings.language),
         onInterim: (text) => {
@@ -232,7 +234,7 @@ async function startListening() {
       );
     } else {
       if (!settings.speech.azureKey || !settings.speech.azureRegion) {
-        throw new SpeechError('Add your Azure Speech key and region in Settings to use voice input, or choose the browser engine.');
+        throw new SpeechError('Add your Azure Speech key and region in Settings to use Azure voice input, or choose the free voice.');
       }
       await recorder.start();
       listenMode = 'azure';
@@ -349,6 +351,13 @@ function showSpeakError(button, message) {
   row.append(el('span', 'speak-error', message));
 }
 
+function handleSpeechNotice(message) {
+  const row = speakingBtn?.parentElement;
+  if (!row) return;
+  row.querySelector('.speak-note')?.remove();
+  row.append(el('span', 'speak-note', message));
+}
+
 function handleSpeechChange(playing) {
   if (!playing && speakingBtn) {
     setSpeakButton(speakingBtn, false);
@@ -363,6 +372,7 @@ async function speakAnswer(button, text) {
   speakingBtn = button;
   setSpeakButton(button, true);
   button.parentElement.querySelector('.speak-error')?.remove();
+  button.parentElement.querySelector('.speak-note')?.remove();
 
   try {
     await player.speak(text, settings.speech);
@@ -590,7 +600,7 @@ ui.langChip.addEventListener('click', async () => {
 ui.oralChip.addEventListener('click', async () => {
   const settings = await loadSettings();
   if (!settings.speech.autoSpeak && !speechReady(settings.speech)) {
-    await openSettings('Oral mode needs an Azure Speech key and region, or the browser voice engine.');
+    await openSettings('Oral mode is free. Keep the Free voice engine, or add an Azure key if you chose Azure.');
     return;
   }
   settings.speech.autoSpeak = !settings.speech.autoSpeak;

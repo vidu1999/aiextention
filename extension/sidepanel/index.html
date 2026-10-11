@@ -105,14 +105,16 @@
           <legend>Oral teacher (voice)</legend>
           <label>Voice engine (for speaking and listening)
             <select id="engine">
-              <option value="azure">Azure neural voice (best Sinhala, speaks and listens)</option>
-              <option value="browser">Browser voice (only if Sinhala is installed)</option>
+              <option value="free">Free voice (no key, recommended)</option>
+              <option value="azure">Azure neural voice (optional, paid, needs your key)</option>
+              <option value="browser">Device voice only (needs Sinhala installed)</option>
             </select>
           </label>
-          <label>Azure Speech key
+          <p class="settings-hint">The free voice uses Microsoft's Thilini voice and a Google backup, with no key. It needs internet. Speaking and listening are both free.</p>
+          <label>Azure Speech key (only for the optional Azure engine)
             <input id="azureKey" type="password" autocomplete="off" placeholder="Speech resource key" />
           </label>
-          <label>Azure region
+          <label>Azure region (only for the optional Azure engine)
             <input id="azureRegion" type="text" placeholder="e.g. eastus" />
           </label>
           <label>Teacher voice

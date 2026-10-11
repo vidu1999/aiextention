@@ -1,14 +1,22 @@
 // Oral output: the teacher reads answers aloud.
-// Main engine: Azure AI Speech neural voices (si-LK-ThiliniNeural is a female
-// Sinhala voice; si-LK-SameeraNeural is male). Fallback: the browser's own voices,
-// which only speak Sinhala if the device has a Sinhala voice installed.
+// Engines (speech.engine in Settings):
+//   'free'    (default) Edge neural Thilini voice (no key) -> Google voice -> device voice
+//   'azure'   Azure AI Speech neural voice (paid, optional, needs your own key)
+//   'browser' the device's own voices only (works offline if Sinhala is installed)
 
-export class SpeechError extends Error {
-  constructor(message, status = 0) {
-    super(message);
-    this.name = 'SpeechError';
-    this.status = status;
-  }
+import { SpeechError } from './errors.js';
+import { synthesizeEdge, synthesizeGoogle } from './edgetts.js';
+
+export { SpeechError };
+
+export const ENGINES = ['free', 'azure', 'browser'];
+export const DEFAULT_ENGINE = 'free';
+export const FREE_CHUNK_CHARS = 180; // Google's free voice rejects longer requests
+export const AZURE_CHUNK_CHARS = 500;
+export const EDGE_RETRY_MS = 10 * 60 * 1000; // after a failure, skip the Edge voice for 10 minutes
+
+export function normalizeEngine(value) {
+  return ENGINES.includes(value) ? value : DEFAULT_ENGINE;
 }
 
 export const SINHALA_VOICES = {
@@ -191,7 +199,7 @@ export function speakWithBrowser(text, { lang = SPEECH_LANG, rate = -5, api = gl
   const voice = pickBrowserVoice(api.getVoices(), lang);
   if (!voice) {
     throw new SpeechError(
-      'This device has no Sinhala voice installed. Choose "Azure neural voice" in Settings for good Sinhala pronunciation.',
+      'This device has no Sinhala voice installed. Keep "Free voice" selected in Settings (needs internet) for natural Sinhala.',
     );
   }
   return new Promise((resolve, reject) => {
@@ -209,26 +217,69 @@ export function speakWithBrowser(text, { lang = SPEECH_LANG, rate = -5, api = gl
   });
 }
 
+/* ---------- free voice chain ---------- */
+
+/**
+ * Tries the free voices in order for one chunk:
+ *   1. Edge neural Thilini voice (no key)
+ *   2. Google translate voice (no key)
+ *   3. device voice (returned as { device: true }; the player speaks it)
+ * Never throws for network problems; the caller decides what to show.
+ */
+export async function synthesizeFree(text, {
+  voice = DEFAULT_VOICE,
+  rate = -5,
+  skipEdge = false,
+  fetchImpl = globalThis.fetch,
+  WebSocketCtor = globalThis.WebSocket,
+  subtle = globalThis.crypto?.subtle,
+} = {}) {
+  const problems = [];
+  let edgeFailed = false;
+  if (!skipEdge) {
+    try {
+      const blob = await synthesizeEdge(text, { voice, rate, WebSocketCtor, subtle });
+      return { blob, via: 'edge', edgeFailed: false };
+    } catch (err) {
+      edgeFailed = true;
+      problems.push(err.message);
+    }
+  }
+  try {
+    const blob = await synthesizeGoogle(text, { fetchImpl });
+    return { blob, via: 'google', edgeFailed };
+  } catch (err) {
+    problems.push(err.message);
+  }
+  return { device: true, via: 'device', edgeFailed, reason: problems.join(' ') };
+}
+
 /* ---------- player ---------- */
 
 /**
- * Speaks text chunk by chunk. Chunks are fetched in parallel and played in order,
- * so the teacher starts talking while later parts are still being generated.
+ * Speaks text chunk by chunk. While chunk N is playing, chunk N+1 is fetched
+ * (one-chunk lookahead), so the teacher starts quickly and never floods the
+ * free services with parallel requests.
  */
 export class OralPlayer {
   constructor({
     fetchImpl = globalThis.fetch,
     createAudio = (src) => new Audio(src),
     speechApi = globalThis.speechSynthesis,
+    WebSocketCtor = globalThis.WebSocket,
     onChange = () => {},
+    onNotice = () => {},
   } = {}) {
     this.fetchImpl = fetchImpl;
     this.createAudio = createAudio;
     this.speechApi = speechApi;
+    this.WebSocketCtor = WebSocketCtor;
     this.onChange = onChange;
+    this.onNotice = onNotice;
     this.token = 0;
     this.current = null;
     this.finishCurrent = null;
+    this.edgeDownUntil = 0;
   }
 
   // Cancels whatever is playing without notifying the UI.
@@ -275,19 +326,45 @@ export class OralPlayer {
     });
   }
 
+  // Returns { blob, via } for audio, or { device: true } when the device voice must speak.
+  async fetchChunk(chunk, speech, engine) {
+    if (engine === 'azure') {
+      const blob = await azureSynthesize({
+        text: chunk,
+        key: speech.azureKey,
+        region: speech.azureRegion,
+        voice: speech.voice,
+        rate: speech.rate,
+        fetchImpl: this.fetchImpl,
+      });
+      return { blob, via: 'azure' };
+    }
+
+    const result = await synthesizeFree(chunk, {
+      voice: speech.voice,
+      rate: speech.rate,
+      skipEdge: Date.now() < this.edgeDownUntil,
+      fetchImpl: this.fetchImpl,
+      WebSocketCtor: this.WebSocketCtor,
+    });
+    if (result.edgeFailed) this.edgeDownUntil = Date.now() + EDGE_RETRY_MS;
+    return result;
+  }
+
   /**
    * @param {string} text  Markdown or plain text from the assistant
-   * @param {{engine: 'azure'|'browser', azureKey: string, azureRegion: string, voice: string, rate: number}} speech
+   * @param {{engine: 'free'|'azure'|'browser', azureKey: string, azureRegion: string, voice: string, rate: number}} speech
    */
   async speak(text, speech) {
     this.halt();
     const token = this.token;
-    const chunks = splitForSpeech(stripForSpeech(text));
+    const engine = normalizeEngine(speech.engine);
+    const chunks = splitForSpeech(stripForSpeech(text), engine === 'azure' ? AZURE_CHUNK_CHARS : FREE_CHUNK_CHARS);
     if (!chunks.length) return;
 
     this.onChange(true);
     try {
-      if (speech.engine === 'browser') {
+      if (engine === 'browser') {
         for (const chunk of chunks) {
           if (token !== this.token) return;
           await speakWithBrowser(chunk, { rate: speech.rate, api: this.speechApi });
@@ -295,22 +372,25 @@ export class OralPlayer {
         return;
       }
 
-      const audio = chunks.map((chunk) =>
-        azureSynthesize({
-          text: chunk,
-          key: speech.azureKey,
-          region: speech.azureRegion,
-          voice: speech.voice,
-          rate: speech.rate,
-          fetchImpl: this.fetchImpl,
-        }),
-      );
-      audio.forEach((p) => p.catch(() => {})); // errors are handled when awaited below
+      const notice = (message) => this.onNotice(message);
 
-      for (let i = 0; i < audio.length; i++) {
-        const blob = await audio[i];
+      let pending = this.fetchChunk(chunks[0], speech, engine);
+      pending.catch(() => {}); // errors are handled when awaited below
+      for (let i = 0; i < chunks.length; i++) {
+        const item = await pending;
         if (token !== this.token) return;
-        await this.play(blob, token);
+        if (i + 1 < chunks.length) {
+          pending = this.fetchChunk(chunks[i + 1], speech, engine);
+          pending.catch(() => {});
+        }
+
+        if (item.device) {
+          notice('Free voices are unreachable right now, so the device voice is reading. Check your internet connection.');
+          await speakWithBrowser(chunks[i], { rate: speech.rate, api: this.speechApi });
+        } else {
+          if (item.via === 'google') notice('The main free voice is unavailable. Using the backup Google voice.');
+          await this.play(item.blob, token);
+        }
         if (token !== this.token) return;
       }
     } finally {

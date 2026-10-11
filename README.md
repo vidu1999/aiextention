@@ -13,10 +13,10 @@ A Gemini-style AI assistant for Chrome. The web page stays on the **left**, and 
   - **Quiz me**: one question at a time, with feedback and a final score.
   - **Explain simply**: plain-language explanation with analogies.
 - **Reference the page**: select text on any page and choose *Ask Page Tutor about "…"* from the right-click menu, or press *Quote selection* in the panel. Right-click *Teach me this page* starts a lesson immediately.
-- **Voice input**: press the 🎤 button and speak your question. The words appear in the message box, so you can check or edit them, then press Enter. Speak Sinhala when the reply language is Sinhala, and English when it is English.
+- **Voice input (free)**: press the 🎤 button and speak your question. The words appear in the message box, so you can check or edit them, then press Enter. Speak Sinhala when the reply language is Sinhala, and English when it is English.
 - **Sinhala replies**: the 🇱🇰 *සිංහල / English* chip sets the language the AI answers in. Sinhala is the default.
-- **Oral teacher**: the 🔇 *Oral* chip turns on spoken answers. A warm female teacher voice reads each answer aloud in Sinhala. Every answer also has a 🔊 *Listen* button, and you can stop playback at any time.
-- **Settings** (⚙): Base URL, API key, and model. *Test connection* checks them. The voice section sets the Azure key, region, teacher voice, speed, and Oral mode.
+- **Oral teacher (free)**: the 🔇 *Oral* chip turns on spoken answers. A warm female teacher voice (Microsoft's Thilini neural voice) reads each answer aloud in Sinhala. No key or payment is needed. Every answer also has a 🔊 *Listen* button, and you can stop playback at any time.
+- **Settings** (⚙): Base URL, API key, and model. *Test connection* checks them. The voice section sets the voice engine, teacher voice, speed, and Oral mode. Azure keys are optional.
 
 ## Arena API
 
@@ -30,34 +30,56 @@ Arena does not publish a public chat API that I could find. The extension theref
 
 If you already have an Arena endpoint in another format, tell me its request/response shape and I will adapt `extension/lib/api.js`.
 
-## Voice input (speak your question)
+## Free oral teacher and voice input (no paid key)
 
-The 🎤 button uses the same **Voice engine** setting as the teacher's voice:
+The default **Voice engine** is *Free voice (no key, recommended)*. It uses free services, so you do not need an Azure account, a card, or any other key for speaking or listening.
 
-- **Azure neural voice** (recommended): records your question, converts it to 16 kHz WAV, and sends it to Azure Speech-to-Text for `si-LK` (Sinhala) or `en-US`. It uses the same key and region as the teacher voice. The browser asks for microphone access the first time. Recordings are limited to 45 seconds, which is well within Azure's 60-second limit for short audio.
-- **Browser voice**: uses Chrome's built-in speech recognition and shows the words as you say them. Sinhala only works if your browser supports it.
+| Part | Free engine used first | If that fails |
+|------|------------------------|---------------|
+| Teacher speaks (Sinhala) | Microsoft's **Thilini** neural voice (`si-LK-ThiliniNeural`), using the same read-aloud service as Microsoft Edge | Google's translate voice (`tl=si`), then the device's own voice |
+| You speak (🎤) | Chrome's built-in speech recognition, set to Sinhala (`si-LK`) or English (`en-US`) | Nothing else is needed. Chrome recognition is free. |
 
-Voice input always writes the text into the box and does not send it. Press Enter when you are happy with it. The teacher stops talking when you start speaking, so it doesn't hear itself.
+How it behaves:
 
-## Oral teacher with Sinhala voice
+- **The teacher starts quickly.** Answers are split into short pieces at sentence ends. While one piece plays, the next is fetched, so there are never more than two requests in flight.
+- **The status line tells you** when a backup voice is used.
+- **If the free voices are blocked**, for example on a restricted network, the panel reads with the device's Sinhala voice (if installed) and shows a message. After one failure, the Thilini voice is skipped for 10 minutes so the answer doesn't stall.
+- **Voice input writes into the box** and does not send. Press Enter when you are happy with the text. The teacher stops when you start speaking.
 
-Oral output uses **Azure AI Speech neural voices**, which speak Sinhala well:
+Requirements and limits:
 
-| Voice | Name in Settings |
-|-------|------------------|
-| Female teacher (default) | `si-LK-ThiliniNeural` |
-| Male | `si-LK-SameeraNeural` |
+- **Internet is needed** for the free teacher voice. The device voice works offline only if the device has a Sinhala voice installed.
+- **Chrome recognition needs internet** too, because Chrome sends the audio to Google's recognition service.
+- **The free voices are unofficial.** Microsoft's read-aloud service and Google's translate voice are not public APIs for extensions. They can change or block requests at any time. The fallback chain keeps the feature working when that happens, but the best voice may sometimes be unavailable.
+- **Recording is limited to 45 seconds** per question.
 
-Setup (one time):
+### Optional: Azure neural voice (paid)
 
-1. In the Azure portal, create a **Speech** resource. Azure has a free tier, but check its current limits on the Azure pricing page.
+Choose *Azure neural voice (optional, paid, needs your key)* only if you want Azure's official, supported voice. Azure is billed by usage, and its free tier has limits. Check the current Azure pricing page first.
+
+1. In the Azure portal, create a **Speech** resource.
 2. Open the resource, go to **Keys and Endpoint**, and copy **Key 1** and the **Location/Region** (for example `eastus`).
-3. In Page Tutor, open ⚙ → *Oral teacher (voice)*. Choose *Azure neural voice*, paste the key and region, pick the teacher voice, and press **▶ Play sample**.
-4. Press the 🔇 *Oral* chip to make the teacher read every answer aloud. Use the 🔊 *Listen* button under any answer to hear just that one.
+3. In Page Tutor, open ⚙ → *Oral teacher (voice)*, choose the Azure option, paste the key and region, and press **▶ Play sample**.
 
-How the speech is prepared: Markdown, links, URLs, code blocks, and emoji are removed before speaking. Long answers are split at sentence ends and played in order, so the teacher starts talking before the whole answer has been generated.
+Azure is used for both speaking (Neural TTS) and listening (Speech-to-Text, 16 kHz WAV, Sinhala or English).
 
-**Browser voice** (no Azure needed) uses the voices installed on your device. It only speaks Sinhala if your device has a Sinhala voice. Otherwise the panel tells you so, and you should use the Azure engine.
+### Choosing the engine
+
+| Setting | Speaks | Listens | Needs |
+|---------|--------|---------|-------|
+| *Free voice* (default) | Thilini neural voice, then Google, then device | Chrome recognition | Internet, no key |
+| *Azure neural voice* | Azure neural voice | Azure speech-to-text | Azure key and region (paid) |
+| *Device voice only* | Device Sinhala voice | Chrome recognition | Sinhala voice installed, for speaking |
+
+### Free teacher voices in the code
+
+Teacher voices are chosen in Settings. The female Thilini voice is the default. Sameera (male) is also offered and uses the same free service; it has not been tested live. The free voice code is in `extension/lib/edgetts.js`, and the fallback chain is in `extension/lib/speech.js`.
+
+How the speech is prepared: Markdown, links, URLs, code blocks, and emoji are removed before speaking, so the voice reads words, not symbols.
+
+### Free AI answers (optional)
+
+The teacher's voice is free, but the AI that writes answers is separate and uses whichever endpoint you configure. Any OpenAI-compatible server works, including a free local server you run yourself (for example, Ollama at `http://localhost:11434/v1`, with a model name it provides). Quality for Sinhala depends on the model.
 
 ## Install (Chrome, Edge, or any Chromium browser ≥ 116)
 
@@ -87,7 +109,9 @@ extension/
   lib/page.js            Page text extractor injected into the active tab
   lib/markdown.js        Safe, dependency-free Markdown renderer
   lib/settings.js        Settings in chrome.storage.local
-  lib/speech.js          Oral output: speech prep, Azure client, browser fallback, player
+  lib/speech.js          Oral output: speech prep, free-voice chain, Azure client, device fallback, player
+  lib/edgetts.js         Free Thilini neural voice (Edge read-aloud WebSocket) and Google backup voice
+  lib/errors.js          Shared SpeechError type
   lib/listen.js          Voice input: recording, WAV conversion, Azure speech-to-text, browser recognition
 scripts/mock-server.mjs  Fake OpenAI-compatible server for development
 tests/                   Unit and integration tests (node:test + jsdom)
@@ -97,7 +121,7 @@ tests/                   Unit and integration tests (node:test + jsdom)
 
 ```bash
 npm install
-npm test              # 59 tests: Markdown, streaming client, prompts, page extraction, speech, voice input
+npm test              # 77 tests: Markdown, streaming client, prompts, page extraction, speech, free voice, voice input
 ```
 
 No build step is needed. Edit files in `extension/` and click the reload icon on the extension in `chrome://extensions`.
@@ -106,7 +130,8 @@ No build step is needed. Edit files in `extension/` and click the reload icon on
 
 - Page text is sent only to the endpoint you configure, and only while *Include page* is on and you send a message. The page is re-read at each send.
 - The API key is stored in `chrome.storage.local` on this browser. It is never sent anywhere except your Base URL.
-- The Azure Speech key is stored the same way and is sent only to Azure's speech endpoint for your region. Text is sent to Azure only when you press Listen or Oral mode is on.
+- The free voices send only the text being read aloud to Microsoft's read-aloud service and to Google's translate voice. Your voice goes to Chrome's speech recognition only while you use 🎤.
+- The optional Azure Speech key is stored the same way and is sent only to Azure's speech endpoint for your region, and only when you choose the Azure engine.
 - Browser-internal pages (`chrome://`, the Chrome Web Store) cannot be read. PDFs shown in Chrome's built-in viewer also expose no text to extensions.
 - Very long pages are trimmed to about 30,000 characters, and the panel says so.
 - The extension asks for access to all sites (`<all_urls>`) so it can read whichever page you are viewing.

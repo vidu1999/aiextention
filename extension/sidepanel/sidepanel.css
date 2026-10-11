@@ -523,6 +523,17 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+.speak-note {
+  color: var(--muted, #5f6368);
+  font-size: 12px;
+}
+
+.settings-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #5f6368);
+}
+
 /* ---------- settings groups ---------- */
 .settings-card {
   max-height: 100%;
