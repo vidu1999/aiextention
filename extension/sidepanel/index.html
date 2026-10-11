@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page Tutor AI</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="spark">✦</span><span>Page Tutor</span></div>
+      <div class="top-actions">
+        <button id="newChatBtn" class="icon-btn" title="New chat" aria-label="New chat">＋</button>
+        <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <section class="page-bar">
+      <div class="page-row">
+        <label class="toggle" title="Let the assistant read the page you are viewing">
+          <input type="checkbox" id="usePage" checked />
+          <span>Use this page</span>
+        </label>
+        <div class="page-actions">
+          <button id="quoteBtn" class="chip-btn" title="Attach the text you selected on the page">Quote selection</button>
+          <button id="refreshPage" class="icon-btn small" title="Re-read page" aria-label="Re-read page">↻</button>
+        </div>
+      </div>
+      <div id="pageInfo" class="page-info">Reading page…</div>
+    </section>
+
+    <main id="chat" class="chat">
+      <div id="empty" class="empty">
+        <h1><span class="gradient">Hi there!</span><br />What should we learn from this page?</h1>
+        <div class="suggestions">
+          <button class="suggestion" data-mode="summarize" data-prompt="Summarize this page in a few clear bullet points.">
+            <strong>Summarize</strong><span>Key points in a few bullets</span>
+          </button>
+          <button class="suggestion" data-mode="teach" data-prompt="Teach me this page step by step, starting from the basics.">
+            <strong>Teach me</strong><span>Step-by-step lesson with examples</span>
+          </button>
+          <button class="suggestion" data-mode="quiz" data-prompt="Quiz me on this page, one question at a time.">
+            <strong>Quiz me</strong><span>Check what you understood</span>
+          </button>
+          <button class="suggestion" data-mode="simplify" data-prompt="Explain this page in very simple words.">
+            <strong>Explain simply</strong><span>Plain language, short answer</span>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <footer class="composer-wrap">
+      <div id="modes" class="modes" role="tablist">
+        <button data-mode="chat" class="mode active">Chat</button>
+        <button data-mode="summarize" class="mode">Summarize</button>
+        <button data-mode="teach" class="mode">Teach me</button>
+        <button data-mode="quiz" class="mode">Quiz me</button>
+        <button data-mode="simplify" class="mode">Explain simply</button>
+      </div>
+      <div id="quoteChip" class="quote-chip" hidden></div>
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="Ask about this page…" aria-label="Message"></textarea>
+        <button id="sendBtn" class="send-btn" type="submit" title="Send" aria-label="Send">➤</button>
+        <button id="stopBtn" class="stop-btn" type="button" title="Stop" aria-label="Stop" hidden>■</button>
+      </form>
+      <p class="disclaimer">AI can make mistakes. Check important facts against the page.</p>
+    </footer>
+
+    <section id="settings" class="settings-overlay" hidden>
+      <form id="settingsForm" class="settings-card">
+        <div class="settings-head">
+          <h2>Settings</h2>
+          <button type="button" id="closeSettings" class="icon-btn" aria-label="Close settings">✕</button>
+        </div>
+        <p class="muted">
+          Point these at your Arena API or any OpenAI-compatible endpoint. Your key is stored only in this browser.
+        </p>
+        <label>Base URL
+          <input id="baseUrl" type="url" placeholder="https://your-host/v1" required />
+        </label>
+        <label>API key
+          <input id="apiKey" type="password" autocomplete="off" placeholder="Optional for local servers" />
+        </label>
+        <label>Model
+          <input id="model" type="text" placeholder="model name from your provider" required />
+        </label>
+        <div class="settings-actions">
+          <button type="button" id="testBtn" class="secondary">Test connection</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+        <p id="settingsStatus" class="status" role="status"></p>
+      </form>
+    </section>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

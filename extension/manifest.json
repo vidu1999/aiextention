@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Page Tutor AI",
+  "version": "0.1.0",
+  "description": "A Gemini-style AI side panel that reads the page you are on, answers questions about it, summarizes it and teaches it step by step.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "storage", "scripting", "contextMenus", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "Open Page Tutor"
+  }
+}
