@@ -1,8 +1,9 @@
 import { streamChat, testConnection } from '../lib/api.js';
-import { loadSettings, saveSettings } from '../lib/settings.js';
+import { loadSettings, saveSettings, normalizeSettings } from '../lib/settings.js';
 import { MODES, DEFAULT_PROMPTS, buildMessages } from '../lib/prompts.js';
 import { renderMarkdown } from '../lib/markdown.js';
 import { extractPageContent, MAX_PAGE_CHARS } from '../lib/page.js';
+import { OralPlayer, SpeechError } from '../lib/speech.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +19,8 @@ const ui = {
   refreshPage: $('refreshPage'),
   quoteBtn: $('quoteBtn'),
   quoteChip: $('quoteChip'),
+  langChip: $('langChip'),
+  oralChip: $('oralChip'),
   newChat: $('newChatBtn'),
   settingsBtn: $('settingsBtn'),
   settings: $('settings'),
@@ -25,6 +28,14 @@ const ui = {
   baseUrl: $('baseUrl'),
   apiKey: $('apiKey'),
   model: $('model'),
+  language: $('language'),
+  engine: $('engine'),
+  azureKey: $('azureKey'),
+  azureRegion: $('azureRegion'),
+  voice: $('voice'),
+  rate: $('rate'),
+  autoSpeak: $('autoSpeak'),
+  speakTestBtn: $('speakTestBtn'),
   testBtn: $('testBtn'),
   closeSettings: $('closeSettings'),
   settingsStatus: $('settingsStatus'),
@@ -40,6 +51,12 @@ const state = {
   quote: null,
   page: null,
 };
+
+// Oral output: one player for the whole panel. `speakingBtn` is the button that
+// is currently playing; `speakRun` ignores errors from runs that were superseded.
+let speakingBtn = null;
+let speakRun = 0;
+const player = new OralPlayer({ onChange: handleSpeechChange });
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -141,6 +158,19 @@ function renderQuote() {
   ui.quoteChip.append(el('span', 'quote-text', `“${preview}”`), remove);
 }
 
+/* ---------- language & oral chips ---------- */
+
+function renderChips(settings) {
+  ui.langChip.textContent = settings.language === 'si' ? 'සිංහල' : 'English';
+  ui.langChip.title = settings.language === 'si' ? 'Replies in Sinhala (tap for English)' : 'Replies in English (tap for Sinhala)';
+  ui.oralChip.textContent = settings.speech.autoSpeak ? '🔊 Oral on' : '🔇 Oral off';
+  ui.oralChip.classList.toggle('active', settings.speech.autoSpeak);
+}
+
+function speechReady(speech) {
+  return speech.engine === 'browser' || Boolean(speech.azureKey && speech.azureRegion);
+}
+
 /* ---------- messages ---------- */
 
 function appendUserMessage(text, quote) {
@@ -158,12 +188,64 @@ function appendUserMessage(text, quote) {
 function appendAssistantMessage() {
   hideEmpty();
   const wrap = el('div', 'msg assistant');
+  const column = el('div', 'col');
   const bubble = el('div', 'bubble md');
   bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
-  wrap.append(el('div', 'avatar', '✦'), bubble);
+  column.append(bubble);
+  wrap.append(el('div', 'avatar', '✦'), column);
   ui.chat.append(wrap);
   scrollDown();
-  return bubble;
+  return { wrap, column, bubble };
+}
+
+// Adds the "Listen" button under a finished answer.
+function addSpeakRow(column, answer) {
+  const row = el('div', 'msg-actions');
+  const button = el('button', 'speak-btn', '🔊 Listen');
+  button.title = 'Read this answer aloud in the teacher’s voice';
+  button.addEventListener('click', () => {
+    if (button.classList.contains('playing')) player.stop();
+    else speakAnswer(button, answer);
+  });
+  row.append(button);
+  column.append(row);
+  return button;
+}
+
+function setSpeakButton(button, playing) {
+  button.textContent = playing ? '⏹ Stop' : '🔊 Listen';
+  button.classList.toggle('playing', playing);
+}
+
+function showSpeakError(button, message) {
+  const row = button.parentElement;
+  row.querySelector('.speak-error')?.remove();
+  row.append(el('span', 'speak-error', message));
+}
+
+function handleSpeechChange(playing) {
+  if (!playing && speakingBtn) {
+    setSpeakButton(speakingBtn, false);
+    speakingBtn = null;
+  }
+}
+
+async function speakAnswer(button, text) {
+  const settings = await loadSettings();
+  const run = ++speakRun;
+  if (speakingBtn) setSpeakButton(speakingBtn, false);
+  speakingBtn = button;
+  setSpeakButton(button, true);
+  button.parentElement.querySelector('.speak-error')?.remove();
+
+  try {
+    await player.speak(text, settings.speech);
+  } catch (err) {
+    if (run === speakRun) {
+      const message = err instanceof SpeechError ? err.message : `Speech failed: ${err.message || err}`;
+      showSpeakError(button, message);
+    }
+  }
 }
 
 function setBusy(busy) {
@@ -192,6 +274,7 @@ async function send(rawText, { mode = state.mode, quote = state.quote } = {}) {
     return;
   }
 
+  player.stop(); // a new question stops the teacher from talking over the answer
   setMode(mode);
   const page = ui.usePage.checked ? await updatePageInfo() : null;
 
@@ -202,12 +285,18 @@ async function send(rawText, { mode = state.mode, quote = state.quote } = {}) {
   state.history.push({ role: 'user', content });
   appendUserMessage(text, quote);
 
-  const bubble = appendAssistantMessage();
+  const { wrap, column, bubble } = appendAssistantMessage();
   const controller = new AbortController();
   state.controller = controller;
   setBusy(true);
 
-  const messages = buildMessages({ history: state.history, mode, page });
+  const messages = buildMessages({
+    history: state.history,
+    mode,
+    page,
+    language: settings.language,
+    oral: settings.speech.autoSpeak,
+  });
   let answer = '';
 
   try {
@@ -219,6 +308,9 @@ async function send(rawText, { mode = state.mode, quote = state.quote } = {}) {
     if (!answer.trim()) throw new Error('The model returned an empty response.');
     state.history.push({ role: 'assistant', content: answer });
     bubble.innerHTML = renderMarkdown(answer);
+
+    const listenButton = addSpeakRow(column, answer);
+    if (settings.speech.autoSpeak) speakAnswer(listenButton, answer);
   } catch (err) {
     if (err.name === 'AbortError') {
       if (answer.trim()) {
@@ -248,6 +340,7 @@ async function submitPrompt(text, mode) {
 
 function newChat() {
   if (state.busy) state.controller?.abort();
+  player.stop();
   state.history = [];
   state.quote = null;
   renderQuote();
@@ -268,13 +361,35 @@ async function openSettings(message = '') {
   ui.baseUrl.value = settings.baseUrl;
   ui.apiKey.value = settings.apiKey;
   ui.model.value = settings.model;
+  ui.language.value = settings.language;
+  ui.engine.value = settings.speech.engine;
+  ui.azureKey.value = settings.speech.azureKey;
+  ui.azureRegion.value = settings.speech.azureRegion;
+  ui.voice.value = settings.speech.voice;
+  ui.rate.value = settings.speech.rate;
+  ui.autoSpeak.checked = settings.speech.autoSpeak;
   ui.settings.hidden = false;
   setSettingsStatus(message);
 }
 
 function readSettingsForm() {
-  return { baseUrl: ui.baseUrl.value, apiKey: ui.apiKey.value, model: ui.model.value };
+  return {
+    baseUrl: ui.baseUrl.value,
+    apiKey: ui.apiKey.value,
+    model: ui.model.value,
+    language: ui.language.value,
+    speech: {
+      engine: ui.engine.value,
+      azureKey: ui.azureKey.value,
+      azureRegion: ui.azureRegion.value,
+      voice: ui.voice.value,
+      rate: ui.rate.value,
+      autoSpeak: ui.autoSpeak.checked,
+    },
+  };
 }
+
+const SAMPLE_LINE = 'ආයුබෝවන්! මම ඔබේ ගුරුවරිය. අද අපි එකට ඉගෙන ගනිමු.';
 
 /* ---------- lesson requests from the context menu ---------- */
 
@@ -339,6 +454,25 @@ ui.modes.addEventListener('click', (event) => {
   if (button) setMode(button.dataset.mode);
 });
 
+ui.langChip.addEventListener('click', async () => {
+  const settings = await loadSettings();
+  settings.language = settings.language === 'si' ? 'en' : 'si';
+  await saveSettings(settings);
+  renderChips(settings);
+});
+
+ui.oralChip.addEventListener('click', async () => {
+  const settings = await loadSettings();
+  if (!settings.speech.autoSpeak && !speechReady(settings.speech)) {
+    await openSettings('Oral mode needs an Azure Speech key and region, or the browser voice engine.');
+    return;
+  }
+  settings.speech.autoSpeak = !settings.speech.autoSpeak;
+  if (!settings.speech.autoSpeak) player.stop();
+  await saveSettings(settings);
+  renderChips(settings);
+});
+
 for (const suggestion of ui.suggestions) {
   suggestion.addEventListener('click', () => {
     submitPrompt(suggestion.dataset.prompt, suggestion.dataset.mode);
@@ -369,7 +503,8 @@ ui.quoteBtn.addEventListener('click', async () => {
 
 ui.settingsForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  await saveSettings(readSettingsForm());
+  const saved = await saveSettings(readSettingsForm());
+  renderChips(saved);
   setSettingsStatus('Saved.', 'ok');
 });
 
@@ -384,6 +519,17 @@ ui.testBtn.addEventListener('click', async () => {
   }
 });
 
+ui.speakTestBtn.addEventListener('click', async () => {
+  const clean = normalizeSettings(readSettingsForm()).speech;
+  setSettingsStatus('Playing sample…');
+  try {
+    await player.speak(SAMPLE_LINE, clean);
+    setSettingsStatus('Sample finished.', 'ok');
+  } catch (err) {
+    setSettingsStatus(err.message, 'error');
+  }
+});
+
 chrome.tabs.onActivated.addListener(() => updatePageInfo());
 chrome.tabs.onUpdated.addListener((_tabId, info) => {
   if (info.status === 'complete') updatePageInfo();
@@ -391,5 +537,6 @@ chrome.tabs.onUpdated.addListener((_tabId, info) => {
 
 setMode('chat');
 renderQuote();
+loadSettings().then(renderChips);
 loadIncludePagePref().then(updatePageInfo);
 checkPending();

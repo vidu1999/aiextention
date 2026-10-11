@@ -57,6 +57,10 @@
         <button data-mode="quiz" class="mode">Quiz me</button>
         <button data-mode="simplify" class="mode">Explain simply</button>
       </div>
+      <div class="toggles-row">
+        <button id="langChip" class="pill-toggle" title="Language of the replies">සිංහල</button>
+        <button id="oralChip" class="pill-toggle" title="Oral mode: the teacher reads every answer aloud">🔇 Oral off</button>
+      </div>
       <div id="quoteChip" class="quote-chip" hidden></div>
       <form id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="Ask about this page…" aria-label="Message"></textarea>
@@ -72,18 +76,61 @@
           <h2>Settings</h2>
           <button type="button" id="closeSettings" class="icon-btn" aria-label="Close settings">✕</button>
         </div>
-        <p class="muted">
-          Point these at your Arena API or any OpenAI-compatible endpoint. Your key is stored only in this browser.
-        </p>
-        <label>Base URL
-          <input id="baseUrl" type="url" placeholder="https://your-host/v1" required />
-        </label>
-        <label>API key
-          <input id="apiKey" type="password" autocomplete="off" placeholder="Optional for local servers" />
-        </label>
-        <label>Model
-          <input id="model" type="text" placeholder="model name from your provider" required />
-        </label>
+
+        <fieldset class="settings-group">
+          <legend>AI model</legend>
+          <p class="muted">
+            Point these at your Arena API or any OpenAI-compatible endpoint. Your key is stored only in this browser.
+          </p>
+          <label>Base URL
+            <input id="baseUrl" type="url" placeholder="https://your-host/v1" required />
+          </label>
+          <label>API key
+            <input id="apiKey" type="password" autocomplete="off" placeholder="Optional for local servers" />
+          </label>
+          <label>Model
+            <input id="model" type="text" placeholder="model name from your provider" required />
+          </label>
+          <label>Reply language
+            <select id="language">
+              <option value="si">සිංහල (Sinhala)</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend>Oral teacher (voice)</legend>
+          <label>Voice engine
+            <select id="engine">
+              <option value="azure">Azure neural voice (best Sinhala)</option>
+              <option value="browser">Browser voice (only if Sinhala is installed)</option>
+            </select>
+          </label>
+          <label>Azure Speech key
+            <input id="azureKey" type="password" autocomplete="off" placeholder="Speech resource key" />
+          </label>
+          <label>Azure region
+            <input id="azureRegion" type="text" placeholder="e.g. eastus" />
+          </label>
+          <label>Teacher voice
+            <select id="voice">
+              <option value="si-LK-ThiliniNeural">Thilini (female teacher)</option>
+              <option value="si-LK-SameeraNeural">Sameera (male)</option>
+            </select>
+          </label>
+          <label>Speaking speed (%)
+            <input id="rate" type="number" min="-50" max="50" step="5" />
+          </label>
+          <label class="check">
+            <input id="autoSpeak" type="checkbox" />
+            <span>Oral mode: read every answer aloud</span>
+          </label>
+          <div class="settings-actions">
+            <button type="button" id="speakTestBtn" class="secondary">▶ Play sample</button>
+          </div>
+        </fieldset>
+
         <div class="settings-actions">
           <button type="button" id="testBtn" class="secondary">Test connection</button>
           <button type="submit" class="primary">Save</button>

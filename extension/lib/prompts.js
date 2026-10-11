@@ -59,6 +59,19 @@ export const BASE_SYSTEM_PROMPT = [
 
 const PAGE_CLOSE_TAG = /<\/page_content>/gi;
 
+export const LANGUAGE_INSTRUCTIONS = {
+  si:
+    'Reply in Sinhala, written in Sinhala script (සිංහල). Use natural, everyday spoken Sinhala, the way a good teacher speaks in class. ' +
+    'Keep code, product names and symbols in English. When an important English term has no common Sinhala word, give it once in brackets.',
+  en: 'Reply in English.',
+};
+
+export const ORAL_INSTRUCTION =
+  'Your reply will be read aloud by a warm, patient female teacher, so write it to be spoken: ' +
+  'short sentences, clear signposts such as "first", "next" and "now let us look at", and no tables. ' +
+  'Do not use emojis, symbols or URLs; describe them in words. Explain code in words rather than reading out symbols. ' +
+  'Keep the reply comfortable to listen to.';
+
 export function formatPage(page) {
   const outline = (page.headings || [])
     .slice(0, 40)
@@ -83,9 +96,14 @@ export function formatPage(page) {
     .join('\n');
 }
 
-export function buildSystemPrompt({ mode = 'chat', page = null } = {}) {
+export function buildSystemPrompt({ mode = 'chat', page = null, language = 'si', oral = false } = {}) {
   const info = MODES[mode] || MODES.chat;
-  const parts = [BASE_SYSTEM_PROMPT, `Current mode: ${info.label}. ${info.instruction}`];
+  const parts = [
+    BASE_SYSTEM_PROMPT,
+    LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS.si,
+    `Current mode: ${info.label}. ${info.instruction}`,
+  ];
+  if (oral) parts.push(ORAL_INSTRUCTION);
   if (page) {
     parts.push(formatPage(page));
   } else {
@@ -94,13 +112,13 @@ export function buildSystemPrompt({ mode = 'chat', page = null } = {}) {
   return parts.join('\n\n');
 }
 
-export function buildMessages({ history = [], mode = 'chat', page = null, maxHistory = 20 } = {}) {
+export function buildMessages({ history = [], mode = 'chat', page = null, language = 'si', oral = false, maxHistory = 20 } = {}) {
   const trimmed = history.slice(-maxHistory);
   // Chat APIs expect the conversation to begin with a user turn.
   while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
 
   return [
-    { role: 'system', content: buildSystemPrompt({ mode, page }) },
+    { role: 'system', content: buildSystemPrompt({ mode, page, language, oral }) },
     ...trimmed.map(({ role, content }) => ({ role, content })),
   ];
 }

@@ -13,7 +13,9 @@ A Gemini-style AI assistant for Chrome. The web page stays on the **left**, and 
   - **Quiz me**: one question at a time, with feedback and a final score.
   - **Explain simply**: plain-language explanation with analogies.
 - **Reference the page**: select text on any page and choose *Ask Page Tutor about "…"* from the right-click menu, or press *Quote selection* in the panel. Right-click *Teach me this page* starts a lesson immediately.
-- **Settings** (⚙): Base URL, API key, and model. *Test connection* checks them.
+- **Sinhala replies**: the 🇱🇰 *සිංහල / English* chip sets the language the AI answers in. Sinhala is the default.
+- **Oral teacher**: the 🔇 *Oral* chip turns on spoken answers. A warm female teacher voice reads each answer aloud in Sinhala. Every answer also has a 🔊 *Listen* button, and you can stop playback at any time.
+- **Settings** (⚙): Base URL, API key, and model. *Test connection* checks them. The voice section sets the Azure key, region, teacher voice, speed, and Oral mode.
 
 ## Arena API
 
@@ -26,6 +28,26 @@ Arena does not publish a public chat API that I could find. The extension theref
 | Model    | the model name your provider exposes |
 
 If you already have an Arena endpoint in another format, tell me its request/response shape and I will adapt `extension/lib/api.js`.
+
+## Oral teacher with Sinhala voice
+
+Oral output uses **Azure AI Speech neural voices**, which speak Sinhala well:
+
+| Voice | Name in Settings |
+|-------|------------------|
+| Female teacher (default) | `si-LK-ThiliniNeural` |
+| Male | `si-LK-SameeraNeural` |
+
+Setup (one time):
+
+1. In the Azure portal, create a **Speech** resource. Azure has a free tier, but check its current limits on the Azure pricing page.
+2. Open the resource, go to **Keys and Endpoint**, and copy **Key 1** and the **Location/Region** (for example `eastus`).
+3. In Page Tutor, open ⚙ → *Oral teacher (voice)*. Choose *Azure neural voice*, paste the key and region, pick the teacher voice, and press **▶ Play sample**.
+4. Press the 🔇 *Oral* chip to make the teacher read every answer aloud. Use the 🔊 *Listen* button under any answer to hear just that one.
+
+How the speech is prepared: Markdown, links, URLs, code blocks, and emoji are removed before speaking. Long answers are split at sentence ends and played in order, so the teacher starts talking before the whole answer has been generated.
+
+**Browser voice** (no Azure needed) uses the voices installed on your device. It only speaks Sinhala if your device has a Sinhala voice. Otherwise the panel tells you so, and you should use the Azure engine.
 
 ## Install (Chrome, Edge, or any Chromium browser ≥ 116)
 
@@ -55,6 +77,7 @@ extension/
   lib/page.js            Page text extractor injected into the active tab
   lib/markdown.js        Safe, dependency-free Markdown renderer
   lib/settings.js        Settings in chrome.storage.local
+  lib/speech.js          Oral output: speech prep, Azure client, browser fallback, player
 scripts/mock-server.mjs  Fake OpenAI-compatible server for development
 tests/                   Unit and integration tests (node:test + jsdom)
 ```
@@ -63,7 +86,7 @@ tests/                   Unit and integration tests (node:test + jsdom)
 
 ```bash
 npm install
-npm test              # 27 tests: Markdown, streaming client, prompts, page extraction
+npm test              # 46 tests: Markdown, streaming client, prompts, page extraction, speech
 ```
 
 No build step is needed. Edit files in `extension/` and click the reload icon on the extension in `chrome://extensions`.
@@ -72,6 +95,7 @@ No build step is needed. Edit files in `extension/` and click the reload icon on
 
 - Page text is sent only to the endpoint you configure, and only while *Include page* is on and you send a message. The page is re-read at each send.
 - The API key is stored in `chrome.storage.local` on this browser. It is never sent anywhere except your Base URL.
+- The Azure Speech key is stored the same way and is sent only to Azure's speech endpoint for your region. Text is sent to Azure only when you press Listen or Oral mode is on.
 - Browser-internal pages (`chrome://`, the Chrome Web Store) cannot be read. PDFs shown in Chrome's built-in viewer also expose no text to extensions.
 - Very long pages are trimmed to about 30,000 characters, and the panel says so.
 - The extension asks for access to all sites (`<all_urls>`) so it can read whichever page you are viewing.
