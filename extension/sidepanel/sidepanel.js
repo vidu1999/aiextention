@@ -4,6 +4,7 @@ import { MODES, DEFAULT_PROMPTS, buildMessages } from '../lib/prompts.js';
 import { renderMarkdown } from '../lib/markdown.js';
 import { extractPageContent, MAX_PAGE_CHARS } from '../lib/page.js';
 import { OralPlayer, SpeechError } from '../lib/speech.js';
+import { VoiceRecorder, convertToWav16k, azureTranscribe, startBrowserListening, sttLanguage } from '../lib/listen.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +20,8 @@ const ui = {
   refreshPage: $('refreshPage'),
   quoteBtn: $('quoteBtn'),
   quoteChip: $('quoteChip'),
+  micBtn: $('micBtn'),
+  voiceStatus: $('voiceStatus'),
   langChip: $('langChip'),
   oralChip: $('oralChip'),
   newChat: $('newChatBtn'),
@@ -57,6 +60,11 @@ const state = {
 let speakingBtn = null;
 let speakRun = 0;
 const player = new OralPlayer({ onChange: handleSpeechChange });
+
+// Voice input state. `listenMode` is 'azure' or 'browser' while the microphone is on.
+let listenMode = null;
+let dictation = null; // { base, settings, browser }
+const recorder = new VoiceRecorder({ onAutoStop: () => stopListening() });
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -170,6 +178,124 @@ function renderChips(settings) {
 function speechReady(speech) {
   return speech.engine === 'browser' || Boolean(speech.azureKey && speech.azureRegion);
 }
+
+/* ---------- voice input ---------- */
+
+function setVoiceStatus(message, kind = '') {
+  ui.voiceStatus.textContent = message || '';
+  ui.voiceStatus.className = `voice-status ${kind}`.trim();
+  ui.voiceStatus.hidden = !message;
+}
+
+function setMicState(stateName) {
+  ui.micBtn.classList.toggle('recording', stateName === 'recording');
+  ui.micBtn.classList.toggle('busy', stateName === 'busy');
+  ui.micBtn.textContent = stateName === 'recording' ? '⏹' : '🎤';
+  ui.micBtn.title = stateName === 'recording' ? 'Finish and write my question' : 'Speak your question';
+  ui.micBtn.disabled = stateName === 'busy';
+  ui.input.placeholder = stateName === 'recording' ? 'Listening… tap ⏹ when you are done' : MODES[state.mode].placeholder;
+}
+
+function joinSpoken(base, spoken) {
+  return [base, spoken].filter(Boolean).join(' ');
+}
+
+async function startListening() {
+  const settings = await loadSettings();
+  player.stop(); // the teacher must not talk over the student
+  setVoiceStatus('');
+  dictation = { base: ui.input.value.trim(), settings, browser: null };
+  try {
+    if (settings.speech.engine === 'browser') {
+      dictation.browser = startBrowserListening({
+        lang: sttLanguage(settings.language),
+        onInterim: (text) => {
+          ui.input.value = joinSpoken(dictation.base, text);
+          autoGrow();
+        },
+      });
+      listenMode = 'browser';
+      // The browser stops listening by itself after a pause: finish the dictation then.
+      dictation.browser.done.then(
+        () => {
+          if (listenMode === 'browser') stopListening();
+        },
+        (err) => {
+          if (listenMode !== 'browser') return;
+          const base = dictation.base;
+          listenMode = null;
+          dictation = null;
+          ui.input.value = base;
+          setMicState('idle');
+          setVoiceStatus(err.message, 'error');
+        },
+      );
+    } else {
+      if (!settings.speech.azureKey || !settings.speech.azureRegion) {
+        throw new SpeechError('Add your Azure Speech key and region in Settings to use voice input, or choose the browser engine.');
+      }
+      await recorder.start();
+      listenMode = 'azure';
+    }
+    setMicState('recording');
+  } catch (err) {
+    listenMode = null;
+    dictation = null;
+    setMicState('idle');
+    setVoiceStatus(err.message, 'error');
+  }
+}
+
+async function stopListening() {
+  if (!listenMode || !dictation) return;
+  const mode = listenMode;
+  const { base, settings, browser } = dictation;
+  listenMode = null;
+  setMicState('busy');
+
+  try {
+    let text;
+    if (mode === 'browser') {
+      browser.stop();
+      text = await browser.done;
+    } else {
+      const blob = await recorder.stop();
+      setVoiceStatus('Writing down what you said…');
+      const wav = await convertToWav16k(blob);
+      text = await azureTranscribe({
+        wav,
+        key: settings.speech.azureKey,
+        region: settings.speech.azureRegion,
+        language: sttLanguage(settings.language),
+      });
+    }
+
+    if (text) {
+      ui.input.value = joinSpoken(base, text);
+      autoGrow();
+      ui.input.focus();
+      const hint = 'Check the text, then press Enter to ask.';
+      setVoiceStatus(hint);
+      setTimeout(() => {
+        if (ui.voiceStatus.textContent === hint) setVoiceStatus('');
+      }, 4000);
+    } else {
+      ui.input.value = base;
+      setVoiceStatus('I did not hear anything. Tap 🎤 and try again.', 'error');
+    }
+  } catch (err) {
+    ui.input.value = base;
+    setVoiceStatus(err.message, 'error');
+  } finally {
+    dictation = null;
+    setMicState('idle');
+  }
+}
+
+ui.micBtn.addEventListener('click', () => {
+  if (listenMode) stopListening();
+  else startListening();
+});
 
 /* ---------- messages ---------- */
 

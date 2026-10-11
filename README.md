@@ -13,6 +13,7 @@ A Gemini-style AI assistant for Chrome. The web page stays on the **left**, and 
   - **Quiz me**: one question at a time, with feedback and a final score.
   - **Explain simply**: plain-language explanation with analogies.
 - **Reference the page**: select text on any page and choose *Ask Page Tutor about "…"* from the right-click menu, or press *Quote selection* in the panel. Right-click *Teach me this page* starts a lesson immediately.
+- **Voice input**: press the 🎤 button and speak your question. The words appear in the message box, so you can check or edit them, then press Enter. Speak Sinhala when the reply language is Sinhala, and English when it is English.
 - **Sinhala replies**: the 🇱🇰 *සිංහල / English* chip sets the language the AI answers in. Sinhala is the default.
 - **Oral teacher**: the 🔇 *Oral* chip turns on spoken answers. A warm female teacher voice reads each answer aloud in Sinhala. Every answer also has a 🔊 *Listen* button, and you can stop playback at any time.
 - **Settings** (⚙): Base URL, API key, and model. *Test connection* checks them. The voice section sets the Azure key, region, teacher voice, speed, and Oral mode.
@@ -28,6 +29,15 @@ Arena does not publish a public chat API that I could find. The extension theref
 | Model    | the model name your provider exposes |
 
 If you already have an Arena endpoint in another format, tell me its request/response shape and I will adapt `extension/lib/api.js`.
+
+## Voice input (speak your question)
+
+The 🎤 button uses the same **Voice engine** setting as the teacher's voice:
+
+- **Azure neural voice** (recommended): records your question, converts it to 16 kHz WAV, and sends it to Azure Speech-to-Text for `si-LK` (Sinhala) or `en-US`. It uses the same key and region as the teacher voice. The browser asks for microphone access the first time. Recordings are limited to 45 seconds, which is well within Azure's 60-second limit for short audio.
+- **Browser voice**: uses Chrome's built-in speech recognition and shows the words as you say them. Sinhala only works if your browser supports it.
+
+Voice input always writes the text into the box and does not send it. Press Enter when you are happy with it. The teacher stops talking when you start speaking, so it doesn't hear itself.
 
 ## Oral teacher with Sinhala voice
 
@@ -78,6 +88,7 @@ extension/
   lib/markdown.js        Safe, dependency-free Markdown renderer
   lib/settings.js        Settings in chrome.storage.local
   lib/speech.js          Oral output: speech prep, Azure client, browser fallback, player
+  lib/listen.js          Voice input: recording, WAV conversion, Azure speech-to-text, browser recognition
 scripts/mock-server.mjs  Fake OpenAI-compatible server for development
 tests/                   Unit and integration tests (node:test + jsdom)
 ```
@@ -86,7 +97,7 @@ tests/                   Unit and integration tests (node:test + jsdom)
 
 ```bash
 npm install
-npm test              # 46 tests: Markdown, streaming client, prompts, page extraction, speech
+npm test              # 59 tests: Markdown, streaming client, prompts, page extraction, speech, voice input
 ```
 
 No build step is needed. Edit files in `extension/` and click the reload icon on the extension in `chrome://extensions`.

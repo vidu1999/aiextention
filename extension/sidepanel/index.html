@@ -62,8 +62,10 @@
         <button id="oralChip" class="pill-toggle" title="Oral mode: the teacher reads every answer aloud">🔇 Oral off</button>
       </div>
       <div id="quoteChip" class="quote-chip" hidden></div>
+      <p id="voiceStatus" class="voice-status" role="status" hidden></p>
       <form id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="Ask about this page…" aria-label="Message"></textarea>
+        <button id="micBtn" class="mic-btn" type="button" title="Speak your question" aria-label="Speak your question">🎤</button>
         <button id="sendBtn" class="send-btn" type="submit" title="Send" aria-label="Send">➤</button>
         <button id="stopBtn" class="stop-btn" type="button" title="Stop" aria-label="Stop" hidden>■</button>
       </form>
@@ -101,9 +103,9 @@
 
         <fieldset class="settings-group">
           <legend>Oral teacher (voice)</legend>
-          <label>Voice engine
+          <label>Voice engine (for speaking and listening)
             <select id="engine">
-              <option value="azure">Azure neural voice (best Sinhala)</option>
+              <option value="azure">Azure neural voice (best Sinhala, speaks and listens)</option>
               <option value="browser">Browser voice (only if Sinhala is installed)</option>
             </select>
           </label>

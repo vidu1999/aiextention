@@ -561,3 +561,41 @@ textarea:focus-visible {
   font-size: 13px;
 }
 .settings-card label.check input { width: auto; }
+
+/* ---------- voice input (microphone) ---------- */
+.mic-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  font-size: 17px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.mic-btn:hover { background: var(--surface-2); color: var(--text); }
+.mic-btn.recording {
+  background: #d93025;
+  color: #fff;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+.mic-btn.busy {
+  color: var(--accent);
+  animation: blink 1.2s infinite ease-in-out;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0.5); }
+  50% { box-shadow: 0 0 0 7px rgba(217, 48, 37, 0); }
+}
+
+.voice-status {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.voice-status.error { color: var(--danger); }
