@@ -5,7 +5,7 @@ A Gemini-style AI assistant for Chrome. The web page stays on the **left**, and 
 ## Features
 
 - **Side panel chat** (Chrome side panel, right side of the window) with streaming answers, Markdown formatting, and a Stop button.
-- **Reads the current page**: title, description, headings outline, and main text. A toggle turns page context on or off, and the ↻ button re-reads the page.
+- **Chat with or without the page**: the *Include page* toggle (above the input) decides whether the assistant reads the page you are viewing. The choice is remembered. With it off, you get a plain AI chat. On browser-internal pages where reading isn't possible, chat still works without the page. The ↻ button re-reads the page.
 - **Modes** above the input:
   - **Chat**: ask anything about the page.
   - **Summarize**: overview plus key points.
@@ -70,7 +70,7 @@ No build step is needed. Edit files in `extension/` and click the reload icon on
 
 ## Privacy and limits
 
-- Page text is sent only to the endpoint you configure, and only while *Use this page* is on and you send a message. The page is re-read at each send.
+- Page text is sent only to the endpoint you configure, and only while *Include page* is on and you send a message. The page is re-read at each send.
 - The API key is stored in `chrome.storage.local` on this browser. It is never sent anywhere except your Base URL.
 - Browser-internal pages (`chrome://`, the Chrome Web Store) cannot be read. PDFs shown in Chrome's built-in viewer also expose no text to extensions.
 - Very long pages are trimmed to about 30,000 characters, and the panel says so.

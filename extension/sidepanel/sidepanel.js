@@ -67,7 +67,7 @@ async function getActivePage() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) throw new Error('No active tab found.');
   if (!/^https?:\/\//i.test(tab.url || '')) {
-    throw new Error('This is a browser page, so it cannot be read. Open a normal website to use Page Tutor.');
+    throw new Error('No page included: this browser page cannot be read. Chat still works; open a normal website to include it.');
   }
 
   const [injection] = await chrome.scripting.executeScript({
@@ -88,13 +88,13 @@ function describePage(page) {
 async function updatePageInfo() {
   if (!ui.usePage.checked) {
     state.page = null;
-    ui.pageInfo.textContent = 'Page context is off.';
+    ui.pageInfo.textContent = 'Chatting without the page. Tick “Include page” to ask about it.';
     ui.pageInfo.classList.remove('error');
     return null;
   }
   try {
     state.page = await getActivePage();
-    ui.pageInfo.textContent = describePage(state.page);
+    ui.pageInfo.textContent = `Including: ${describePage(state.page)}`;
     ui.pageInfo.classList.remove('error');
     return state.page;
   } catch (err) {
@@ -103,6 +103,16 @@ async function updatePageInfo() {
     ui.pageInfo.classList.add('error');
     return null;
   }
+}
+
+// Remember the "Include page" choice between sessions.
+async function loadIncludePagePref() {
+  const { includePage } = await chrome.storage.local.get('includePage');
+  ui.usePage.checked = includePage !== false; // default: on
+}
+
+function saveIncludePagePref() {
+  chrome.storage.local.set({ includePage: ui.usePage.checked });
 }
 
 /* ---------- modes & quotes ---------- */
@@ -335,7 +345,10 @@ for (const suggestion of ui.suggestions) {
   });
 }
 
-ui.usePage.addEventListener('change', updatePageInfo);
+ui.usePage.addEventListener('change', () => {
+  saveIncludePagePref();
+  updatePageInfo();
+});
 ui.refreshPage.addEventListener('click', updatePageInfo);
 
 ui.quoteBtn.addEventListener('click', async () => {
@@ -378,5 +391,5 @@ chrome.tabs.onUpdated.addListener((_tabId, info) => {
 
 setMode('chat');
 renderQuote();
-updatePageInfo();
+loadIncludePagePref().then(updatePageInfo);
 checkPending();
